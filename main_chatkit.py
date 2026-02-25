@@ -1,20 +1,14 @@
 """
-CalculatorAgent - FastAPI Backend with ChatKit Streaming
+CalculatorAgent - FastAPI Backend with ChatKit SDK
 """
 
 import os
-import json
-import asyncio
-from typing import AsyncGenerator
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from chatkit import ChatKitServer
+from agents_config import agent
 from agents import Runner
-from agents_config import agent  # Import from agents_config.py instead
-from config import get_session
-from models import CalculationResult
 
 # Load environment variables
 load_dotenv()
@@ -26,11 +20,11 @@ if not os.getenv("OPENAI_API_KEY"):
 # Create FastAPI app
 app = FastAPI(
     title="CalculatorAgent ChatKit Backend",
-    description="ChatKit-compatible streaming backend for Calculator Agent",
-    version="2.0.0"
+    description="ChatKit-compatible backend for Calculator Agent using ChatKit SDK",
+    version="3.0.0"
 )
 
-# Add CORS middleware for frontend integration
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -45,55 +39,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str = "default"
+# Create ChatKit server instance
+chatkit_server = ChatKitServer()
 
 
-class ChatResponse(BaseModel):
-    result: CalculationResult
-
-
-async def stream_chatkit_response(message: str, session_id: str) -> AsyncGenerator[str, None]:
+@chatkit_server.respond
+async def handle_message(ctx):
     """
-    Stream ChatKit-compatible SSE events for agent responses.
+    Handle incoming messages from ChatKit.
 
-    ChatKit expects events in this format:
-    data: {"type": "content", "content": "text chunk"}
-    data: {"type": "done"}
+    This function is called when a user sends a message.
+    It runs the agent and streams the response back to ChatKit.
     """
-    try:
-        # Get session for memory
-        session = get_session(session_id)
+    # Get the user's message
+    user_message = ctx.user_message
 
-        # Run agent
-        result = await Runner.run(agent, message, session=session)
+    print(f"✅ Processing message: {user_message}")
 
-        # Get the structured calculation result
-        calculation = result.final_output
+    # Run the agent
+    result = await Runner.run(agent, user_message)
 
-        # Stream the text response first
-        response_text = f"The result is **{calculation.result}**"
+    # Get the calculation result
+    calculation = result.final_output
 
-        # Send content chunk
-        yield f"data: {json.dumps({'type': 'content', 'content': response_text})}\n\n"
+    # Stream response back to ChatKit
+    response_text = f"The result is **{calculation.result}**\n\n**Calculation:** {calculation.operand1} {calculation.operation} {calculation.operand2} = {calculation.result}"
 
-        # Small delay for better UX
-        await asyncio.sleep(0.1)
-
-        # Send calculation breakdown as a structured message
-        calc_breakdown = f"\n\n**Calculation:**\n{calculation.operand1} {calculation.operation} {calculation.operand2} = {calculation.result}"
-        yield f"data: {json.dumps({'type': 'content', 'content': calc_breakdown})}\n\n"
-
-        # Send done event
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-    except Exception as e:
-        # Send error message
-        error_msg = f"❌ Sorry, I couldn't process that: {str(e)}"
-        yield f"data: {json.dumps({'type': 'content', 'content': error_msg})}\n\n"
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+    await ctx.stream_agent_response(
+        messages=[{"role": "assistant", "content": response_text}]
+    )
 
 
 @app.get("/")
@@ -101,12 +75,12 @@ async def root():
     """Service information endpoint."""
     return {
         "service": "CalculatorAgent ChatKit Backend",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "agent": "Calculator Agent",
+        "chatkit_sdk": "enabled",
         "endpoints": {
             "health": "/health",
             "chatkit": "/chatkit (POST)",
-            "calculate": "/calculate (POST - legacy)",
         }
     }
 
@@ -117,113 +91,8 @@ async def health():
     return {"status": "healthy", "service": "CalculatorAgent ChatKit"}
 
 
-@app.post("/chatkit")
-async def chatkit_endpoint(request: Request):
-    """
-    ChatKit-compatible streaming endpoint.
-
-    Handles ChatKit API format:
-    - threads.list: List threads
-    - threads.create: Create new thread with user message
-    Returns: JSON responses or SSE stream
-    """
-    try:
-        # Parse request body
-        body = await request.json()
-        print(f"📥 Received ChatKit request: {body}")  # Debug log
-
-        request_type = body.get("type", "")
-        params = body.get("params", {})
-
-        # Handle threads.list request
-        if request_type == "threads.list":
-            print("📋 Handling threads.list request")
-            return {"data": [], "has_more": False}
-
-        # Handle threads.create request
-        if request_type == "threads.create":
-            # Extract message from ChatKit format
-            input_data = params.get("input", {})
-            content = input_data.get("content", [])
-
-            # Get text from content array
-            message = ""
-            for item in content:
-                if item.get("type") == "input_text":
-                    message = item.get("text", "")
-                    break
-
-            if not message:
-                print("❌ Error: No message in threads.create")
-                return {"error": "Message is required"}
-
-            print(f"✅ Processing message: {message}")
-
-            # Create a thread ID
-            thread_id = f"thread_{int(asyncio.get_event_loop().time() * 1000)}"
-
-            # Return streaming response
-            return StreamingResponse(
-                stream_chatkit_response(message, thread_id),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                }
-            )
-
-        # Unknown request type
-        print(f"❌ Unknown request type: {request_type}")
-        return {"error": f"Unknown request type: {request_type}"}
-
-    except Exception as e:
-        print(f"❌ ChatKit endpoint error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {"error": str(e)}
-
-
-@app.post("/calculate")
-async def calculate(request: ChatRequest):
-    """
-    Legacy non-streaming endpoint for backward compatibility.
-
-    Example requests:
-    - "can you add 2 + 25?"
-    - "what is 10 minus 3?"
-    - "multiply 5 by 7"
-    - "divide 100 by 4"
-    """
-    try:
-        # Get session for memory
-        session = get_session(request.session_id)
-
-        # Run agent
-        result = await Runner.run(agent, request.message, session=session)
-
-        return ChatResponse(result=result.final_output)
-
-    except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/history/{session_id}")
-async def get_history(session_id: str, limit: int = 10):
-    """Get calculation history for a user session."""
-    try:
-        session = get_session(session_id)
-        items = await session.get_items(limit=limit)
-
-        return {
-            "session_id": session_id,
-            "history": items
-        }
-
-    except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+# Mount ChatKit server to FastAPI
+app.mount("/chatkit", chatkit_server.app)
 
 
 if __name__ == "__main__":
