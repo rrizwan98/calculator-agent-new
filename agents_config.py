@@ -17,6 +17,15 @@ Support the following operations:
 - Division (/)
 
 Always return results in a structured JSON format with operation details. Parse natural language requests and extract the mathematical expression before calculating.""",
-    tools=[CodeInterpreterTool()],
+    tools=[
+        CodeInterpreterTool(
+            tool_config={
+                "type": "code_interpreter",
+                "container": {
+                    "type": "auto",
+                }
+            }
+        )
+    ],
     output_type=CalculationResult,
 )
