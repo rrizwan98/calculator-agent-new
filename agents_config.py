@@ -2,11 +2,12 @@
 CalculatorAgent - Agent Configuration with Custom Function Tools
 """
 
-from agents import Agent, FunctionTool
+from agents import Agent, function_tool
 from models import CalculationResult
 
 
-# Custom calculator functions
+# Custom calculator functions using @function_tool decorator
+@function_tool
 def add_numbers(a: float, b: float) -> float:
     """
     Add two numbers together.
@@ -21,6 +22,7 @@ def add_numbers(a: float, b: float) -> float:
     return a + b
 
 
+@function_tool
 def subtract_numbers(a: float, b: float) -> float:
     """
     Subtract second number from first number.
@@ -35,6 +37,7 @@ def subtract_numbers(a: float, b: float) -> float:
     return a - b
 
 
+@function_tool
 def multiply_numbers(a: float, b: float) -> float:
     """
     Multiply two numbers together.
@@ -49,6 +52,7 @@ def multiply_numbers(a: float, b: float) -> float:
     return a * b
 
 
+@function_tool
 def divide_numbers(a: float, b: float) -> float:
     """
     Divide first number by second number.
@@ -87,10 +91,10 @@ Examples:
 - "multiply 7 by 8" -> multiply_numbers(7, 8) -> result: 56
 - "divide 150 by 3" -> divide_numbers(150, 3) -> result: 50.0""",
     tools=[
-        FunctionTool(add_numbers),
-        FunctionTool(subtract_numbers),
-        FunctionTool(multiply_numbers),
-        FunctionTool(divide_numbers),
+        add_numbers,
+        subtract_numbers,
+        multiply_numbers,
+        divide_numbers,
     ],
     output_type=CalculationResult,
 )
