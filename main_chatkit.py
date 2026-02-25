@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from chatkit import ChatKitServer
+from chatkit.server import ChatKitServer
 from agents_config import agent
 from agents import Runner
 
