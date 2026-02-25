@@ -2,13 +2,14 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
+import ChatProvider from '@/components/chat/ChatProvider'
+import ChatWidget from '@/components/chat/ChatWidget'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Calculator Agent - AI-Powered Natural Language Calculator',
-  description: 'Calculate anything in plain English with our AI-powered calculator agent. No complex formulas needed - just ask and get instant results.',
-  keywords: ['calculator', 'AI calculator', 'natural language calculator', 'math AI', 'OpenAI', 'calculator agent'],
+  title: 'Calculator Agent - Natural Language Calculator',
+  description: 'AI-powered calculator that understands natural language',
 }
 
 export default function RootLayout({
@@ -17,15 +18,20 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en">
       <head>
-        {/* ChatKit JS Script */}
+        {/* ChatKit Script */}
         <Script
           src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
           strategy="beforeInteractive"
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <ChatProvider>
+          {children}
+          <ChatWidget />
+        </ChatProvider>
+      </body>
     </html>
   )
 }
