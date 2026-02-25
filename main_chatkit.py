@@ -128,11 +128,16 @@ async def chatkit_endpoint(request: Request):
     try:
         # Parse request body
         body = await request.json()
+        print(f"📥 Received ChatKit request: {body}")  # Debug log
+
         message = body.get("message", "")
         session_id = body.get("session_id", "default")
 
         if not message:
+            print("❌ Error: No message provided")
             return {"error": "Message is required"}
+
+        print(f"✅ Processing message: {message}")
 
         # Return streaming response
         return StreamingResponse(
@@ -146,6 +151,9 @@ async def chatkit_endpoint(request: Request):
         )
 
     except Exception as e:
+        print(f"❌ ChatKit endpoint error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 
