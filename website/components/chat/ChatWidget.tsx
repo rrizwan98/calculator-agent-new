@@ -17,6 +17,8 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [isChatKitLoaded, setIsChatKitLoaded] = useState(false)
   const chatKitRef = useRef<ChatKitElement | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isInitialized = useRef(false)
 
   useEffect(() => {
     // Check if ChatKit is loaded
@@ -34,58 +36,56 @@ export default function ChatWidget() {
     return () => clearInterval(interval)
   }, [])
 
+  // Initialize ChatKit once when loaded
   useEffect(() => {
-    if (isOpen && isChatKitLoaded && !chatKitRef.current) {
-      const chatContainer = document.getElementById('chatkit-container')
-      if (chatContainer) {
-        // Create ChatKit element
-        const chatkit = document.createElement('openai-chatkit') as ChatKitElement
-        chatkit.style.width = '100%'
-        chatkit.style.height = '100%'
+    if (isChatKitLoaded && !isInitialized.current && containerRef.current) {
+      // Create ChatKit element once
+      const chatkit = document.createElement('openai-chatkit') as ChatKitElement
+      chatkit.style.width = '100%'
+      chatkit.style.height = '100%'
 
-        chatContainer.appendChild(chatkit)
-        chatKitRef.current = chatkit
+      containerRef.current.appendChild(chatkit)
+      chatKitRef.current = chatkit
+      isInitialized.current = true
 
-        // Configure ChatKit with custom backend
-        setTimeout(() => {
-          if (chatkit.setOptions) {
-            chatkit.setOptions({
-              api: {
-                url: process.env.NEXT_PUBLIC_CHATKIT_API_URL || 'http://localhost:8000/chatkit',
-                domainKey: '', // Not needed for custom backend
-              },
-            })
-          }
-        }, 100)
-      }
+      // Configure ChatKit with custom backend
+      setTimeout(() => {
+        if (chatkit.setOptions) {
+          chatkit.setOptions({
+            api: {
+              url: process.env.NEXT_PUBLIC_CHATKIT_API_URL || 'http://localhost:8000/chatkit',
+              domainKey: '', // Not needed for custom backend
+            },
+          })
+        }
+      }, 100)
     }
+  }, [isChatKitLoaded])
 
-    // Cleanup when closing
-    if (!isOpen && chatKitRef.current) {
-      const chatContainer = document.getElementById('chatkit-container')
-      if (chatContainer) {
-        chatContainer.innerHTML = ''
-      }
-      chatKitRef.current = null
+  // Toggle visibility instead of destroying/recreating
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.style.display = isOpen ? 'block' : 'none'
     }
-  }, [isOpen, isChatKitLoaded])
+  }, [isOpen])
 
   return (
     <>
-      {/* Chat Panel */}
-      {isOpen && (
-        <div className="fixed bottom-20 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden border border-gray-200">
-          {!isChatKitLoaded && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading ChatKit...</p>
-              </div>
+      {/* Chat Panel - Always in DOM, just hidden/shown */}
+      <div
+        ref={containerRef}
+        className="fixed bottom-20 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden border border-gray-200"
+        style={{ display: 'none' }}
+      >
+        {!isChatKitLoaded && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading ChatKit...</p>
             </div>
-          )}
-          <div id="chatkit-container" className="w-full h-full"></div>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* Floating Button */}
       <button
