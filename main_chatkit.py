@@ -122,33 +122,60 @@ async def chatkit_endpoint(request: Request):
     """
     ChatKit-compatible streaming endpoint.
 
-    Accepts JSON: {"message": "user message", "session_id": "optional-session-id"}
-    Returns: Server-Sent Events (SSE) stream
+    Handles ChatKit API format:
+    - threads.list: List threads
+    - threads.create: Create new thread with user message
+    Returns: JSON responses or SSE stream
     """
     try:
         # Parse request body
         body = await request.json()
         print(f"📥 Received ChatKit request: {body}")  # Debug log
 
-        message = body.get("message", "")
-        session_id = body.get("session_id", "default")
+        request_type = body.get("type", "")
+        params = body.get("params", {})
 
-        if not message:
-            print("❌ Error: No message provided")
-            return {"error": "Message is required"}
+        # Handle threads.list request
+        if request_type == "threads.list":
+            print("📋 Handling threads.list request")
+            return {"data": [], "has_more": False}
 
-        print(f"✅ Processing message: {message}")
+        # Handle threads.create request
+        if request_type == "threads.create":
+            # Extract message from ChatKit format
+            input_data = params.get("input", {})
+            content = input_data.get("content", [])
 
-        # Return streaming response
-        return StreamingResponse(
-            stream_chatkit_response(message, session_id),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            }
-        )
+            # Get text from content array
+            message = ""
+            for item in content:
+                if item.get("type") == "input_text":
+                    message = item.get("text", "")
+                    break
+
+            if not message:
+                print("❌ Error: No message in threads.create")
+                return {"error": "Message is required"}
+
+            print(f"✅ Processing message: {message}")
+
+            # Create a thread ID
+            thread_id = f"thread_{int(asyncio.get_event_loop().time() * 1000)}"
+
+            # Return streaming response
+            return StreamingResponse(
+                stream_chatkit_response(message, thread_id),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                }
+            )
+
+        # Unknown request type
+        print(f"❌ Unknown request type: {request_type}")
+        return {"error": f"Unknown request type: {request_type}"}
 
     except Exception as e:
         print(f"❌ ChatKit endpoint error: {str(e)}")
