@@ -6,6 +6,7 @@ Natural language calculator using OpenAI Agents SDK
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from agents import Runner
 from agents_config import agent
@@ -24,6 +25,19 @@ app = FastAPI(
     title="CalculatorAgent",
     description="Natural language calculator agent that performs basic math operations",
     version="1.0.0"
+)
+
+# Add CORS middleware for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://*.vercel.app",  # For Vercel deployments
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
